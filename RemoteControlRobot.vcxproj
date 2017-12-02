@@ -11,7 +11,7 @@
     </ProjectConfiguration>
   </ItemGroup>
   <PropertyGroup Label="Globals">
-    <ProjectGuid>{C5F80730-F44F-4478-BDAE-6634EFC2CA88}</ProjectGuid>
+    <ProjectGuid>{0F884127-2856-4CDA-BD2A-A9ACEC78AB8F}</ProjectGuid>
     <RootNamespace>
     </RootNamespace>
     <ProjectName>RemoteControlRobot</ProjectName>
