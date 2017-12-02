@@ -11,12 +11,12 @@
 #include "message.h"
 #include <ArduinoNunchuk.h>
 #include <SoftwareSerial.h>
-//#define Debug
+//#define DEBUG
 
 SoftwareSerial radio_serial(11, 12); // RX, TX
 
 #define BAUDRATE	115200
-const unsigned int	timeOut = 100; 
+const unsigned int	timeOut = 750; 
 unsigned long		sendTimer;
 static struct debug_info di;
 
@@ -28,14 +28,16 @@ ArduinoNunchuk nunchuk = ArduinoNunchuk();
 //char inChar;			// Where to store the character read
 byte index = 0;			// Index into array; where to store the character
 bool gotData = false;
+unsigned int stopSend = 0;
 
 
 byte X_val;
 byte Y_val;
-byte lastValue;
+byte lastValue, lastValueDyn;
 int readings = 0;
 byte minX, maxX, minY, maxY, readX, readY;
 byte lastX, lastY;
+byte buttonZ,buttonC;
 
 void setup()
 {
@@ -121,7 +123,7 @@ void setup()
 	lastX = X_val;
 	lastY = Y_val;
 	lastValue = 0;
-	sendTimer = millis();
+	sendTimer = millis()+timeOut;
 }
 //******************************************************************************************
 
@@ -133,8 +135,16 @@ void loop()
 
 	X_val = map(nunchuk.analogX, minX - 2, maxX + 2, 0, 255);
 	Y_val = map(nunchuk.analogY, minY - 2, maxY + 2, 0, 255);
-	Serial.println(X_val);
-	delay(10); //10 millisec delay for each loop
+	buttonZ = nunchuk.zButton;
+	buttonC = nunchuk.cButton;
+
+
+#ifdef DEBUG
+	Serial.print(buttonZ); Serial.print("  "); Serial.println(buttonC);
+	//Serial.print(X_val); Serial.print("  "); Serial.println(Y_val);
+#endif // DEBUG
+
+	delay(20); //10 millisec delay for each loop
 
 
 	//We have 14 byte to fill in
@@ -158,14 +168,26 @@ void loop()
 	if (X_val < 100) { di.data1 = 0x03; di.data2 = 255 - X_val; }
 	if (Y_val > 160) { di.data1 = 0x02; di.data2 = Y_val; }
 	if (Y_val < 100) { di.data1 = 0x01; di.data2 = 255 - Y_val; }
-
+	if (buttonZ == 1) {
+	//	di.data3 = 0x01;
+	}
+	else if (buttonC == 1)
+	{
+	//	di.data3 = 0x02;
+	}
+//	if (di.data1 == 0) stopSend++; //Only send stop command 10 times, then we stop sending, save power
+//	 else stopSend = 0;
 
 	/*Send debug info each 100 mSec or when data change*/
-	if ((lastValue != di.data1) || (millis() >= sendTimer))
+	if ((lastValue != di.data1) || (abs(lastValueDyn-di.data2)>5)||(millis()>sendTimer))
 	{
-		sendTimer = +timeOut; //Add timeout value to the Sentimer, for the next resend, currently 100mSec
+//		sendTimer += timeOut; //Add timeout value to the Sentimer, for the next resend, currently 100mSec
+		lastValueDyn = di.data2;
 		lastValue = di.data1;
+	//	Serial.print(lastValue); Serial.print("  "); Serial.print(di.data1); Serial.print("  "); Serial.print(stopSend); Serial.print("  "); Serial.println(sendTimer);
 		radio_write((char *)&di);
+		sendTimer = millis() + timeOut;
+
 	}
 
 
