@@ -1,9 +1,9 @@
 /* Copyright Michael Rahr
  * This project is based on the ArduinoNunchuck library.
  *
- * 
  *
- * 
+ *
+ *
  *
  */
 
@@ -11,14 +11,19 @@
 #include "message.h"
 #include <ArduinoNunchuk.h>
 #include <SoftwareSerial.h>
-//#define DEBUG
+ //#define DEBUG
 
-SoftwareSerial radio_serial(11, 12); // RX, TX
+//SoftwareSerial radio_serial(11, 12); // RX, TX
 
 #define BAUDRATE	115200
-const unsigned int	timeOut = 750; 
+#define NEW_REMOTE
+const unsigned int	timeOut = 750;
 unsigned long		sendTimer;
+
+#ifdef NEW_REMOTE
 static struct debug_info di;
+#endif // NEW_REMOTE
+
 
 
 ArduinoNunchuk nunchuk = ArduinoNunchuk();
@@ -37,19 +42,17 @@ byte lastValue, lastValueDyn;
 int readings = 0;
 byte minX, maxX, minY, maxY, readX, readY;
 byte lastX, lastY;
-byte buttonZ,buttonC;
+byte buttonZ, buttonC;
 
 void setup()
 {
 
 	pinMode(cmd, OUTPUT);		//Set command pin to LOW to enforce command mode
-	digitalWrite(cmd, LOW);		
+	digitalWrite(cmd, LOW);
 
 
 
-#ifdef DEBUG
-	Serial.begin(BAUDRATE);
-#endif // DEBUG
+Serial.begin(BAUDRATE);
 
 	nunchuk.init();
 	minX = minY = 140;
@@ -59,14 +62,14 @@ void setup()
 	Serial.println("Setting up Software Serial for the OpenSmart");
 #endif // DEBUG
 
-	
-	
-//******************************************************************************************
-//Setup the radio to 19200 BAUD
-//This is done by setting it into command mode and send "AT+BAUD=4"
-//And then ste it back into transiver mode
 
-	radio_serial.begin(9600);
+
+	//******************************************************************************************
+	//Setup the radio to 19200 BAUD
+	//This is done by setting it into command mode and send "AT+BAUD=4"
+	//And then ste it back into transiver mode
+
+	//radio_serial.begin(9600);
 
 
 #ifdef DEBUG
@@ -78,9 +81,9 @@ void setup()
 	}
 #endif // DEBUG
 
-
-//********************************************************************************************************
-//Radio setup
+#ifndef NEW_REMOTE
+	//********************************************************************************************************
+	//Radio setup
 	delay(100);
 	radio_serial.println("AT+BAUD=4");		//Send the AT command 
 	delay(200);
@@ -93,6 +96,9 @@ void setup()
 	radio_serial.begin(19200);	//Open the serial port to the Radio
 	delay(200);					//Wait 200ms Be starting to communicate
 //********************************************************************************************************
+
+
+#endif // NEW_REMOTE
 
 
 
@@ -115,7 +121,7 @@ void setup()
 		if (readY < minY) minY = readY;
 		delay(10);
 	}
-	
+
 
 	nunchuk.update();
 	X_val = map(nunchuk.analogX, minX - 2, maxX + 2, 0, 255);
@@ -123,7 +129,7 @@ void setup()
 	lastX = X_val;
 	lastY = Y_val;
 	lastValue = 0;
-	sendTimer = millis()+timeOut;
+	sendTimer = millis() + timeOut;
 }
 //******************************************************************************************
 
@@ -154,6 +160,9 @@ void loop()
 	//13		  byte
 	//We fill in the datastruct on each loop, this should ensure that we never end up sending a direction
 	//for more than 100 mSec even if the device miss the stop command
+
+
+#ifndef NEW_REMOTE
 	di.id = messageId::sendSteeringCmd;
 	di.data1 = 0x00;
 	di.data2 = 0x00;
@@ -162,6 +171,21 @@ void loop()
 	di.PidSetpoint = 0.0;
 	di.SelfBalancePidSetpoint = 0.0;
 	di.end = endOfMessage;
+#endif // !NEW_REMOTE
+	msgCommandStruct.speed = 0;
+	msgCommandStruct.turn = 0;
+
+
+	if ((X_val < 100) || (X_val > 160))
+		msgCommandStruct.speed = X_val;
+	
+	if ((Y_val < 100) || (Y_val > 160))
+		msgCommandStruct.turn = Y_val;
+			
+
+
+
+#ifndef  NEW_REMOTE
 
 
 	if (X_val > 160) { di.data1 = 0x04; di.data2 = X_val; }
@@ -169,22 +193,28 @@ void loop()
 	if (Y_val > 160) { di.data1 = 0x02; di.data2 = Y_val; }
 	if (Y_val < 100) { di.data1 = 0x01; di.data2 = 255 - Y_val; }
 	if (buttonZ == 1) {
-	//	di.data3 = 0x01;
+		//	di.data3 = 0x01;
 	}
 	else if (buttonC == 1)
 	{
-	//	di.data3 = 0x02;
+		//	di.data3 = 0x02;
 	}
-//	if (di.data1 == 0) stopSend++; //Only send stop command 10 times, then we stop sending, save power
-//	 else stopSend = 0;
 
-	/*Send debug info each 100 mSec or when data change*/
-	if ((lastValue != di.data1) || (abs(lastValueDyn-di.data2)>5)||(millis()>sendTimer))
+#endif //  NEW_REMOTE
+
+
+	//	if (di.data1 == 0) stopSend++; //Only send stop command 10 times, then we stop sending, save power
+	//	 else stopSend = 0;
+
+		/*Send debug info each 100 mSec or when data change*/
+	
+	
+	if ((abs(lastValue - msgCommandStruct.speed)>5) || (abs(lastValueDyn - msgCommandStruct.turn) > 5) || (millis() > sendTimer))
 	{
-//		sendTimer += timeOut; //Add timeout value to the Sentimer, for the next resend, currently 100mSec
-		lastValueDyn = di.data2;
-		lastValue = di.data1;
-	//	Serial.print(lastValue); Serial.print("  "); Serial.print(di.data1); Serial.print("  "); Serial.print(stopSend); Serial.print("  "); Serial.println(sendTimer);
+		//		sendTimer += timeOut; //Add timeout value to the Sentimer, for the next resend, currently 100mSec
+		lastValueDyn = msgCommandStruct.speed;
+		lastValue = msgCommandStruct.turn;
+			Serial.print(lastValue); Serial.print("  "); Serial.print(lastValueDyn); Serial.print("  "); Serial.print(stopSend); Serial.print("  "); Serial.println(sendTimer);
 		radio_write((char *)&di);
 		sendTimer = millis() + timeOut;
 
@@ -195,6 +225,7 @@ void loop()
 
 //******************************************************************************************************************************************************
 void radio_write(char* data) {
-	radio_serial.write((uint8_t*)data, sizeof(debug_info));
+	//radio_serial.write((uint8_t*)data, sizeof(debug_info));
+	Serial.write((uint8_t*)data, sizeof(debug_info));
 }
 

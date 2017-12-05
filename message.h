@@ -54,3 +54,9 @@ struct __attribute__((packed)) debug_info {
 	float PidSetpoint;
 	byte end;
 };
+
+//Command control
+struct __attribute__((packed)) _msgCommand {
+	byte speed;
+	byte turn;
+}; static _msgCommand  msgCommandStruct;
